@@ -21,9 +21,30 @@ CLASS zcl_rap_entity_vh_query DEFINITION
       CHANGING
         !ct_data   TYPE STANDARD TABLE .
 
+
+          types:
+    TY_BIG5 type table of zbig5 .
+
+  methods CONSTRUCTOR .
+  class-methods CONV_TO_TABLE
+    importing
+      !PI_TRDATA type STRING .
+  methods GET_CHAR_BIG5
+    importing
+      value(PI_CHAR) type CHAR1 optional
+    exporting
+      value(PE_BIG5) type XSTRING
+      value(PE_ASCII) type FLAG .
+  methods CONV_STR_TO_BIG5
+    importing
+      !PI_STR type CHAR128 optional
+      !PI_BIG5_LEN type INT4 optional
+    exporting
+      !PE_BIG5 type XSTRING .
+
   PROTECTED SECTION.
   PRIVATE SECTION.
-
+  class-data GT_BIG5 type TY_BIG5 .
     TYPES ty_response_tab TYPE STANDARD TABLE OF zvtest_vh2 WITH EMPTY KEY.
 
     METHODS upd
@@ -193,6 +214,80 @@ CLASS zcl_rap_entity_vh_query IMPLEMENTATION.
 *)->if_xco_xlsx_ra_operation~execute( ).
 *
 *Where iv_xstring is an excel file converted into string and rt_records is a DDIC-table type which represents structure of your excel table.
+
+  ENDMETHOD.
+
+    METHOD constructor.
+  check gt_big5[] is initial.
+    SELECT *
+    FROM zbig5
+    ORDER BY jstr
+    INTO TABLE @gt_big5.
+  ENDMETHOD.
+
+    METHOD conv_str_to_big5.
+    CLEAR pe_big5.
+
+    DATA: l_time TYPE i.
+    DATA: l_char TYPE char1.
+    DATA: l_pos TYPE i.
+    DATA: l_len_cnt TYPE i.
+    DATA: l_ascii TYPE flag.
+    DATA: l_xstr TYPE xstring.
+    l_time = strlen( pi_str ) .
+
+    l_pos = 0.
+    DO l_time TIMES.
+      l_char = pi_str+l_pos(1).
+      CLEAR l_xstr.
+      get_char_big5( EXPORTING  pi_char = l_char
+                     IMPORTING  pe_big5 = l_xstr
+                                pe_ascii = l_ascii ).
+      IF l_ascii = 'X'.
+        ADD 1 TO l_len_cnt.
+      ELSE.
+        ADD 2 TO l_len_cnt.
+      ENDIF.
+      IF l_len_cnt > pi_big5_len.
+        EXIT.
+      ELSE.
+        CONCATENATE pe_big5 l_xstr INTO pe_big5 IN BYTE MODE.
+      ENDIF.
+
+      ADD 1 TO l_pos.
+    ENDDO.
+
+  ENDMETHOD.
+    METHOD conv_to_table.
+    DATA: lt_big5_tab TYPE TABLE OF zbig5.
+    /ui2/cl_json=>deserialize(
+    EXPORTING
+      json             = pi_trdata
+    CHANGING
+      data             = lt_big5_tab
+         ).
+
+    LOOP AT lt_big5_tab ASSIGNING FIELD-SYMBOL(<big5>).
+      <big5>-tabix = sy-tabix.
+    ENDLOOP.
+    DELETE FROM  zbig5.
+    MODIFY  zbig5 FROM TABLE @lt_big5_tab.
+  ENDMETHOD.
+
+   METHOD get_char_big5.
+    DATA: l_encoded TYPE string.
+    CLEAR: pe_big5, pe_ascii.
+    READ TABLE gt_big5 INTO DATA(lw_big5) WITH KEY jstr = pi_char BINARY SEARCH.
+    IF sy-subrc = 0.
+      l_encoded = lw_big5-base64.
+      pe_big5 = CL_WEB_HTTP_UTILITY=>decode_x_base64( encoded = l_encoded ).
+      IF lw_big5-typ = 'ASCII'.
+        pe_ascii = 'X'.
+      ENDIF.
+
+    ELSE.
+      pe_big5 = '#'.
+    ENDIF.
 
   ENDMETHOD.
 
