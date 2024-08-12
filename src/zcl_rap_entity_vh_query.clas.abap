@@ -286,7 +286,15 @@ CLASS zcl_rap_entity_vh_query IMPLEMENTATION.
       ENDIF.
 
     ELSE.
-      pe_big5 = '#'.
+    clear pe_big5 .
+      READ TABLE gt_big5 into lw_big5 WITH KEY jstr = '#' BINARY SEARCH.
+    IF sy-subrc = 0.
+    l_encoded = lw_big5-base64.
+      pe_big5 = CL_WEB_HTTP_UTILITY=>decode_x_base64( encoded = l_encoded ).
+      IF lw_big5-typ = 'ASCII'.
+        pe_ascii = 'X'.
+      ENDIF.
+     endif.
     ENDIF.
 
   ENDMETHOD.
