@@ -1,0 +1,4 @@
+@EndUserText.label: 'test'
+define service Ztest_sv2 {
+  expose zvtest_vh2 as t1;
+}
